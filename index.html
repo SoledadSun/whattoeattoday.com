@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+        <meta charset="UTF-8">
+        <meta name="keywords" content="">
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>What to eat today?</title>
+
+        <!-- Bootstrap載入 -->
+        <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/css/bootstrap.min.css" rel="stylesheet"
+            integrity="sha384-EVSTQN3/azprG1Anm3QDgpJLIm9Nao0Yz1ztcQTwFspd3yD65VohhpuuCOmLASjC" crossorigin="anonymous">
+</head>
+<body style="margin: 0; padding: 0;">
+    <div style="display: flex;">
+    <div id="map" style="width: 50%; height: 100vh;"></div>
+
+    <div style="padding: 16px;">
+        <h3>今天吃什麼?</h3>
+        <input id="search-input" type="text" placeholder="想吃什麼?" class="form-control"/>
+        <button class="btn btn-primary mt-2" id="add">加入我的最愛</button>
+
+        <h4 class="mt-4">我的最愛</h4>
+        <ul class="list-group list-group-flush list-group-numbered" id="restaurant-list"> <!--list-group-numbered: li無外框, list-group-numbered: li前面有數字 --></ul>
+
+        <button id="draw" class="btn btn-success mt-2">轉轉看吃什麼</button>
+
+        <!-- 輪盤區域 -->
+        <div id="wheel" style="position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background-color: rgba(0,0,0,.3); display: none;">
+            <canvas id='canvas' width='600' height='600' style="position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);"></canvas>
+        </div>
+    </div>
+    </div>
+
+    <!-- winwheel載入 -->
+    <script src="js/Winwheel.js"></script>
+
+    <!-- cdn TweenMax.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/2.1.3/TweenMax.min.js"></script>
+
+    <script>
+        let map;
+        let currentPosition;
+        let selectedRestaurant;
+        let marker;
+        let directionsService; //取得路線資訊
+        let directionsRenderer; //畫出路線
+        let infoWindow;
+
+        function initMap(){
+            map = new google.maps.Map(document.getElementById('map'), {
+                center: { lat: 23.533118, lng:121.0211024 },    //台灣經緯度
+                zoom: 7, //地圖範圍大小
+            });
+
+            navigator.geolocation.getCurrentPosition(function(position){
+                currentPosition = {
+                    lat: position.coords.latitude,
+                    lng: position.coords.longitude,
+                };
+
+                map.setCenter(currentPosition);
+                map.setZoom(16);
+
+                const autocomplete = new google.maps.places.Autocomplete(
+                    document.getElementById('search-input'),
+                    { 
+                        types: ['restaurant'],  //設定搜尋到的都是餐廳
+                        bounds:{  //設定邊界
+                            east: currentPosition.lng + 0.001, //一經度單位約是100公里, 此處設定100公尺
+                            west: currentPosition.lng - 0.001,
+                            south: currentPosition.lat - 0.001,
+                            north: currentPosition.lat + 0.001,
+                        },
+                        strictBounds: false, //上方僅為預設搜尋範圍, 不限制此範圍
+                    }
+                );  
+                
+                autocomplete.addListener('place_changed', function(){
+                    const place = autocomplete.getPlace();
+
+                    selectedRestaurant = { //連結API顯示資訊 (網頁console/object內)
+                        location: place.geometry.location,
+                        placeId: place.place_id,
+                        name: place.name,
+                        address: place.formatted_address,
+                        phoneNumber: place.formatted_phone_number,
+                        rating: place.rating,
+                    };
+
+                    //中心定位到搜尋的餐廳
+                    map.setCenter(selectedRestaurant.location);
+
+                    //顯示餐廳資訊: 紅標到地圖上
+                    if (!marker) { 
+                        marker = new google.maps.Marker({
+                            map: map, //指定到哪個地圖上
+                        });
+                    }
+
+                    marker.setPosition(selectedRestaurant.location); //設定marker位置到搜尋餐廳的location, 搜尋餐廳標示"紅標"
+                    
+                    //取得步行路線, 定義directionsService跟directionsRenderer
+                    if (!directionsService) {
+                        directionsService = new google.maps.DirectionsService();
+                    }
+
+                    if (!directionsRenderer) {
+                        directionsRenderer = new google.maps.DirectionsRenderer({
+                            map: map, //指定畫到哪個地圖上
+                        });
+                    }
+
+                    directionsRenderer.set('directions', null); //確定renderer是清空的
+
+                    //取得路線
+                    directionsService.route(
+                        {
+                            //出發點
+                            origin: new google.maps.LatLng( //建立經緯度物件
+                                currentPosition.lat,
+                                currentPosition.lng
+                            ),
+
+                            //到達點
+                            destination: {
+                                placeId: selectedRestaurant.placeId,
+                            },
+
+                            //出發方式: 步行
+                            travelMode: 'WALKING',
+                        }, 
+                        
+                        function (response, status) { //callback function: 拿到結果, 狀態
+                            if (status === 'OK') { //如果取得狀態OK
+                                directionsRenderer.setDirections(response);
+
+                                //marker上顯示資訊框
+                                if (!infoWindow) { //判斷是否有infoWindow
+                                    infoWindow = new google.maps.InfoWindow();
+                                }
+
+                                infoWindow.setContent( //設定infoWindow裡面的內容
+                                    //嵌入內容產生餐廳資訊
+                                    `
+                                    <h3>${selectedRestaurant.name}</h3>
+                                    <div>地址: ${selectedRestaurant.address}</div>
+                                    <div>電話: ${selectedRestaurant.phoneNumber}</div>
+                                    <div>評分: ${selectedRestaurant.rating}</div>
+                                    <div>步行時間: ${response.routes[0].legs[0].duration.text}</div>
+                                    `
+                                );
+                                infoWindow.open(map, marker); //打開infoWindow, 定位到marker
+                            }
+                        }
+                    );  
+                });
+            });
+        };
+    
+        //初始化我的最愛列表
+        const restaurantList = JSON.parse(localStorage.getItem('restaurantList')) || []; 
+        restaurantList.forEach(function(restaurant){
+            document.getElementById('restaurant-list').innerHTML += `
+                <li class="list-group-item">
+                    ${restaurant.name}
+                    <button class="btn-close float-end remove"></button>
+                </li>
+            `
+        });
+
+        //輪盤前置作業:顏色設定
+        const colors = ['#eae56f', '#89f26e', '#7de6ef', '#e7706f'];
+
+        const wheel = new Winwheel({
+            //設定輪盤切成幾份
+            numSegments: restaurantList.length, //restaurantList取出陣列, 用length取得數量
+            //顯示內容及樣式
+            segments: restaurantList.map((restaurant, index) => {
+                return {
+                    fillStyle: colors[index % 4], //4個顏色, 第[0]個餐廳取餘數=0對應到第一個顏色
+                    text: restaurant.name,
+                    strokeStyle: 'white',
+                };
+            }),
+
+            //旋轉效果設定
+            pins: true, //輪盤邊緣圓點效果
+            animation: {
+                type: 'spinToStop',
+                spin: 16, //旋轉16圈後停下
+                easing: 'Power4.easeInOut', //旋轉速度動畫效果
+                callbackFinished: function(segment){ //停下後顯示餐廳資訊
+                    //抽到之後關閉輪盤
+                    document.getElementById('wheel').style.display = 'none';
+                    wheel.rotationAngle = 0; //輪盤重置
+                    wheel.draw(); //重置完重新畫輪盤
+
+                    window.alert(segment.text)
+                    //從localStorage搜尋到抽到的餐廳
+                    const restaurantList = 
+                        JSON.parse(localStorage.getItem('restaurantList')) || []; 
+                    selectedRestaurant = restaurantList.find(function (restaurant) {
+                        return restaurant.name === segment.text
+                    });
+                    
+                    //抽到的餐廳重複之前的效果, 顯示路線
+                    map.setCenter(selectedRestaurant.location);
+
+                    //顯示餐廳資訊: 紅標到地圖上
+                    if (!marker) { 
+                        marker = new google.maps.Marker({
+                            map: map, //指定到哪個地圖上
+                        });
+                    }
+
+                    marker.setPosition(selectedRestaurant.location); //設定marker位置到搜尋餐廳的location, 搜尋餐廳標示"紅標"
+                    
+                    //取得步行路線, 定義directionsService跟directionsRenderer
+                    if (!directionsService) {
+                        directionsService = new google.maps.DirectionsService();
+                    }
+
+                    if (!directionsRenderer) {
+                        directionsRenderer = new google.maps.DirectionsRenderer({
+                            map: map, //指定畫到哪個地圖上
+                        });
+                    }
+
+                    directionsRenderer.set('directions', null); //確定renderer是清空的
+
+                    //取得路線
+                    directionsService.route(
+                        {
+                            //出發點
+                            origin: new google.maps.LatLng( //建立經緯度物件
+                                currentPosition.lat,
+                                currentPosition.lng
+                            ),
+
+                            //到達點
+                            destination: {
+                                placeId: selectedRestaurant.placeId,
+                            },
+
+                            //出發方式: 步行
+                            travelMode: 'WALKING',
+                        }, 
+                        
+                        function (response, status) { //callback function: 拿到結果, 狀態
+                            if (status === 'OK') { //如果取得狀態OK
+                                directionsRenderer.setDirections(response);
+
+                                //marker上顯示資訊框
+                                if (!infoWindow) { //判斷是否有infoWindow
+                                    infoWindow = new google.maps.InfoWindow();
+                                }
+
+                                infoWindow.setContent( //設定infoWindow裡面的內容
+                                    //嵌入內容產生餐廳資訊
+                                    `
+                                    <h3>${selectedRestaurant.name}</h3>
+                                    <div>地址: ${selectedRestaurant.address}</div>
+                                    <div>電話: ${selectedRestaurant.phoneNumber}</div>
+                                    <div>評分: ${selectedRestaurant.rating}</div>
+                                    <div>步行時間: ${response.routes[0].legs[0].duration.text}</div>
+                                    `
+                                );
+                                infoWindow.open(map, marker); //打開infoWindow, 定位到marker
+                            }
+                        }
+                    );
+                },
+            },
+        });
+
+        //加入我的最愛
+        document.getElementById('add').addEventListener('click', function(){
+            document.getElementById('restaurant-list').innerHTML += `
+                <li class="list-group-item">
+                    ${selectedRestaurant.name}
+                    <button class="btn-close float-end remove"></button>
+                </li>
+            `
+            //將餐廳(自行命名restaurantList)存到瀏覽器localStorage
+            //取出的資料是"字串", 用JSON.parse將取出的字串(在轉為變數前)轉為JavaScript的"陣列"
+            //若取出來的是空的, "|| [];": 判定需設為空的陣列            
+            const restaurantList = JSON.parse(localStorage.getItem('restaurantList')) || []; 
+            
+            //新增到最愛餐廳, 同步更新輪盤
+            //定義新增到最愛餐廳的顏色
+            const color = colors[restaurantList.length % 4]
+            wheel.addSegment ({
+                fillStyle: color,
+                text: selectedRestaurant.name,
+                strokeStyle: 'white',
+            });
+            wheel.draw();
+            
+            //將選區餐廳存入陣列"restaurantList"
+            restaurantList.push(selectedRestaurant);
+            //存回loclStorage, JSON.stringify: 存進去前轉為字串
+            //完成儲存
+            localStorage.setItem('restaurantList', JSON.stringify(restaurantList));
+        });
+
+        //刪除功能
+        document.getElementById('restaurant-list').addEventListener('click', function(e){
+            if (e.target.classList.contains('remove')) { //如果點到的物件(event)含有"remove"元素
+                e.target.parentNode.remove(); //e.target.parentNode是"li"
+                //innerText屬性: 取得li後的文字, trim()的function:刪除空白
+                const restaurantName = e.target.parentNode.innerText.trim();
+
+                const restaurantList = JSON.parse(localStorage.getItem('restaurantList')) || []; 
+
+                //刪除餐廳後, 輪盤需同步刪除
+                //找到刪除餐廳的陣列位置
+                const index = restaurantList.findIndex(function(restaurant){
+                    return restaurant.name === restaurantName;
+                });
+                wheel.deleteSegment(index + 1); //ex.找到[0]的餐廳需刪除第1個segment
+                wheel.draw();//重畫輪盤
+
+                //需先找到"刪除的餐廳", 篩選過回傳出"陣列", 所以再用變數"newRestaurant"儲存結果
+                const newRestaurantList = restaurantList.filter(function(restaurant){
+                    //篩選所有餐廳, 若餐廳名稱=想刪除的名稱, return false: 刪除
+                    //若名稱不同, return true: 保留
+                    if (restaurant.name === restaurantName) return false;
+                    return true;
+                });
+
+                //存入篩選過後的餐廳列表
+                localStorage.setItem('restaurantList', JSON.stringify(newRestaurantList));
+            };
+        });
+
+        //輪盤按鈕(#draw)顯示輪盤
+        document.getElementById('draw').addEventListener('click', function(){
+            //選取輪盤
+            document.getElementById('wheel').style.display = "block";
+            //呼叫按鈕
+            wheel.startAnimation();
+        });
+    </script>
+
+    <script async
+    src="https://maps.googleapis.com/maps/api/js?key=AIzaSyBPR2xRmyokCHEb2LTIi7T1nK2xqBQPtVo&libraries=places&callback=initMap&region=TW&language=zh-TW">
+    </script>
+</body>
+</html>
