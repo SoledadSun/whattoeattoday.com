@@ -13,23 +13,58 @@
 </head>
 <body style="margin: 0; padding: 0;">
     <div style="display: flex;">
-    <div id="map" style="width: 50%; height: 100vh;"></div>
+        <!-- 地圖區塊 -->
+        <div id="map" style="width: 50%; height: 100vh;"></div>
 
-    <div style="padding: 16px;">
-        <h3>今天吃什麼?</h3>
-        <input id="search-input" type="text" placeholder="想吃什麼?" class="form-control"/>
-        <button class="btn btn-primary mt-2" id="add">加入我的最愛</button>
+        <!-- 右側區塊 -->
+        <div style="padding: 16px; width: 50%; height: 100vh;">
+            <h3>今天吃什麼?</h3>
+            <input id="search-input" type="text" placeholder="想吃什麼?" class="form-control"/>
+            <button class="btn mt-2" id="add" style="border-radius: 15px; background-color: #ff6b6b; color: white; box-shadow: 1px 1px 5px 1px grey;">加入我的最愛</button>
 
-        <h4 class="mt-4">我的最愛</h4>
-        <ul class="list-group list-group-flush list-group-numbered" id="restaurant-list"> <!--list-group-numbered: li無外框, list-group-numbered: li前面有數字 --></ul>
+            <h4 class="mt-4">我的最愛</h4>
+            <ul class="list-group list-group-flush list-group-numbered" id="restaurant-list"> <!--list-group-numbered: li無外框, list-group-numbered: li前面有數字 --></ul>
 
-        <button id="draw" class="btn btn-success mt-2">轉轉看吃什麼</button>
+            <button id="draw" class="btn mt-2" style="border-radius: 15px; background-color: #4ecdc4; color: white; box-shadow: 1px 1px 5px 1px grey;">轉轉看吃什麼</button>
+            
+            <h5 style="clear: both; margin-top: 30px; background-color: #ffe66d; border-radius: 2px;">猜你想吃什麼</h5>
+            
+            <div class="like" style="display: flex;">
+                
+                <div class="demobox" style="width: 150px; margin: 10px;">
+                    <a href="https://goo.gl/maps/kEYaD3yo9F7uGggw5" style="text-decoration: none; font-weight: 700;" title="點擊看地圖">
+                        <img src="images/fries.JPG" alt="台南南恩咖啡" style="width: 100%; border-radius: 20px; height: 190px;">
+                    <h6 style="text-align: center;">好好早午餐</h6>
+                    </a>
+                </div>
 
-        <!-- 輪盤區域 -->
-        <div id="wheel" style="position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background-color: rgba(0,0,0,.3); display: none;">
-            <canvas id='canvas' width='600' height='600' style="position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);"></canvas>
+                <div class="demobox" style="width: 150px; margin: 10px;">
+                    <a href="#" style="text-decoration: none; font-weight: 700;" title="點擊看地圖" >
+                        <img src="images/brunch.JPG" alt="英國早午餐" style="width: 100%; border-radius: 20px; height: 190px;">
+                    <h6 style="text-align: center;">美式大拼盤</h6>
+                    </a>
+                </div>
+
+                <div class="demobox" style="width: 150px; margin: 10px;">
+                    <a href="#" style="text-decoration: none; font-weight: 700;" title="點擊看地圖">
+                        <img src="images/cake.JPG" alt="台南二子咖啡" style="width: 100%; border-radius: 20px; height: 190px;">
+                    <h6 style="text-align: center;">台南二子咖啡</h6>
+                    </a>
+                </div>
+
+                <div class="demobox" style="width: 150px; margin: 10px;">
+                    <a href="#" style="text-decoration: none; font-weight: 700;" title="點擊看地圖">
+                        <img src="images/boxcake.JPG" alt="台南下午茶" style="width: 100%; border-radius: 20px; height: 190px;">
+                    <h6 style="text-align: center;">盒子蛋糕</h6>
+                    </a>
+                </div>
+            </div>
+
+            <!-- 輪盤區域 -->
+            <div id="wheel" style="position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background-color: rgba(0,0,0,.3); display: none;">
+                <canvas id='canvas' width='600' height='600' style="position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);"></canvas>
+            </div>
         </div>
-    </div>
     </div>
 
     <!-- winwheel載入 -->
@@ -170,7 +205,7 @@
         });
 
         //輪盤前置作業:顏色設定
-        const colors = ['#eae56f', '#89f26e', '#7de6ef', '#e7706f'];
+        const colors = ['#ffe66d', '#4ecdc4', '#f7fff7', '#ff6b6b'];
 
         const wheel = new Winwheel({
             //設定輪盤切成幾份
@@ -178,7 +213,7 @@
             //顯示內容及樣式
             segments: restaurantList.map((restaurant, index) => {
                 return {
-                    fillStyle: colors[index % 4], //4個顏色, 第[0]個餐廳取餘數=0對應到第一個顏色
+                    fillStyle: colors[index % 4], //4個顏色取餘數, 第[0]個餐廳取餘數=0對應到第一個顏色
                     text: restaurant.name,
                     strokeStyle: 'white',
                 };
